@@ -8,7 +8,7 @@ from src.common import (
     get_grid_dimensions, get_unique_colors
 )
 
-class ARCTopusOrchestrator:
+class ARCtopus:
     def __init__(self, data_dir: str = "data/arc-prize-2025"):
         self.data_dir = Path(data_dir)
         self.training_challenges = load_arc_challenges(self.data_dir / "arc-agi_training_challenges.json")
@@ -92,18 +92,14 @@ class ARCTopusOrchestrator:
 
 # Example usage (for testing)
 if __name__ == "__main__":
-    # Ensure you are running this from the 'arctopus' directory
-    # e.g., if your script is at arctopus/src/orchestrator/main_orchestrator.py
-    # you would run: python -m src.orchestrator.main_orchestrator
     
-    orchestrator = ARCTopusOrchestrator()
+    orchestrator = ARCtopus()
     
     # Pick a random training task ID to test
-    # (You can inspect the JSON files to pick a specific one)
     import random
     all_train_ids = list(orchestrator.training_challenges.keys())
     
-    # Let's pick a fixed simple one for consistent testing, like '007bbfb7' or '050a417b' if available
+    # Pick a fixed simple one for consistent testing, like '007bbfb7' or '050a417b' if available
     test_task_id = '007bbfb7' if '007bbfb7' in all_train_ids else random.choice(all_train_ids)
     
     # Run the orchestrator for this task
