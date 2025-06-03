@@ -1,1 +1,9 @@
-none yet
+# Core ML/AI libraries
+torch
+transformers
+numpy
+jupyterlab # For notebooks
+
+# For Gemma, ensure you have the correct version/setup
+# If using uv, it will manage the env much better.
+# For now, just placeholder. Actual Gemma installation will be done in Colab/TPU.
