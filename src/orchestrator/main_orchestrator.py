@@ -8,13 +8,17 @@ from src.common import (
     get_grid_dimensions, get_unique_colors
 )
 
+from src.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle
+
 class ARCtopus:
     def __init__(self, data_dir: str = "data/arc-prize-2025"):
         self.data_dir = Path(data_dir)
         self.training_challenges = load_arc_challenges(self.data_dir / "arc-agi_training_challenges.json")
         self.evaluation_challenges = load_arc_challenges(self.data_dir / "arc-agi_evaluation_challenges.json")
-        # Note: We won't load solutions here to avoid accidental peeking during development
-        # For actual evaluation, solutions would be on the Kaggle side.
+        
+        # Initialize our primary Program Synthesis Tentacle
+        # In the future, other tentacles might be initialized here too
+        self.program_synthesis_tentacle = ProgramSynthesisTentacle()
 
     def process_task(self, task_id: str, challenge_set: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -34,6 +38,7 @@ class ARCtopus:
             })
         
         test_inputs_text = [grid_to_text(test_input['input']) for test_input in task_data['test']]
+
         test_inputs_grid = [test_input['input'] for test_input in task_data['test']]
 
         # --- Basic Feature Extraction ---
@@ -62,7 +67,6 @@ class ARCtopus:
     def run_single_task(self, task_id: str, is_evaluation_task: bool = False) -> Dict[str, Any]:
         """
         Runs the full ARCtopus pipeline for a single task.
-        (This will be expanded significantly later)
         """
         challenge_set = self.training_challenges if not is_evaluation_task else self.evaluation_challenges
         
@@ -73,34 +77,74 @@ class ARCtopus:
         for i, ex in enumerate(processed_task['train_examples_processed']):
             print(f"  Example {i+1} Input:\n{ex['input_text']}")
             print(f"  Example {i+1} Output:\n{ex['output_text']}")
-        print(f"Test Input (text):\n{processed_task['test_inputs_text'][0]}") # Assuming one test input for now
+        print(f"Test Input (text):\n{processed_task['test_inputs_text'][0]}")
         print(f"Extracted Features: {processed_task['features']}")
         
-        # --- Dummy Strategy Selector / Routing Logic (Placeholder) ---
-        print("\nStrategy Selector: Choosing Program Synthesis Tentacle (Dummy Logic)...")
-        # In the future, this is where we'd call a Tentacle and orchestrate its work
+        # --- Strategy Selector / Routing Logic (NOW calling Tentacle) ---
+        print("\nStrategy Selector: Routing to Program Synthesis Tentacle (Dummy Logic)...")
         
-        # For now, just a placeholder of what a solution might look like
-        dummy_prediction = {
+        # Call the Program Synthesis Tentacle
+        predicted_test_outputs = self.program_synthesis_tentacle.solve(processed_task)
+        
+        submission_entry = {
             'task_id': task_id,
-            'prediction': [[0,0],[0,0]] # A dummy 2x2 black grid as a placeholder prediction
+            'prediction': [] # Default to empty if no prediction is made
         }
+
+        if predicted_test_outputs:
+            print(f"[ARCTopus] Program Synthesis Tentacle provided prediction.")
+            # For submission, we need to provide a list of predictions for each test input.
+            # The competition allows up to 2 attempts, but for now we'll just use the first prediction.
+            submission_entry['prediction'] = predicted_test_outputs[0] # Take first prediction from list
+        else:
+            print(f"[ARCTopus] Program Synthesis Tentacle failed to provide prediction for task {task_id}.")
         
-        print(f"\nDummy Prediction for Task {task_id}: {dummy_prediction['prediction']}")
+        print(f"\nFinal Prediction for Task {task_id}: {submission_entry['prediction']}")
         
-        return dummy_prediction
+        return submission_entry
+    
+    def run_all_tasks(self, is_evaluation_set: bool = False, output_filepath: str = "submission.json"):
+        """
+        Runs the ARCtopus on all tasks in the specified set and saves a submission file.
+        """
+        challenges_to_run = self.evaluation_challenges if is_evaluation_set else self.training_challenges
+        submission_data = {"predictions": []}
+        
+        print(f"\n--- Running ARCTopus on {'EVALUATION' if is_evaluation_set else 'TRAINING'} set ({len(challenges_to_run)} tasks) ---")
+        
+        for i, task_id in enumerate(challenges_to_run.keys()):
+            print(f"\n===== Task {i+1}/{len(challenges_to_run)}: {task_id} =====")
+            task_prediction = self.run_single_task(task_id, is_evaluation_task=is_evaluation_set)
+            submission_data["predictions"].append(task_prediction)
+            
+            # For brevity, let's just run 1 task for now in the main block
+            # In actual competition, you'd run all.
+            # For the basic skeleton, we'll stop after the first for a quick test.
+            if i == 0:
+                print("\n(Stopping after first task for basic skeleton test. Remove this break for full run.)")
+                break 
+        
+        # Save dummy submission (or actual predictions later)
+        # save_submission(submission_data, output_filepath)
+        # print(f"\nSubmission saved to {output_filepath}")
 
 # Example usage (for testing)
 if __name__ == "__main__":
     
     orchestrator = ARCtopus()
     
-    # Pick a random training task ID to test
+    # Run a single training task as a test for end-to-end flow
+    # It will call the dummy LLM and always return [[0,0],[0,0]]
     import random
     all_train_ids = list(orchestrator.training_challenges.keys())
     
     # Pick a fixed simple one for consistent testing, like '007bbfb7' or '050a417b' if available
     test_task_id = '007bbfb7' if '007bbfb7' in all_train_ids else random.choice(all_train_ids)
     
-    # Run the orchestrator for this task
+    print(f"\n--- Initiating ARCTopus run for single task: {test_task_id} ---")
     orchestrator.run_single_task(test_task_id, is_evaluation_task=False)
+    print("\n--- Single task run complete. ---")
+
+    # To run on all tasks (after Program Synthesis Tentacle is more robust):
+    # orchestrator.run_all_tasks(is_evaluation_set=False, output_filepath="dummy_train_submission.json")
+    # print("\n--- Full training set run complete. Check dummy_train_submission.json ---")
