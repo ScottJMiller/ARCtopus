@@ -1,9 +1,8 @@
-# Core ML/AI libraries
+# arctopus/requirements.txt
 torch
 transformers
 numpy
-jupyterlab # For notebooks
-
-# For Gemma, ensure you have the correct version/setup
-# If using uv, it will manage the env much better.
-# For now, just placeholder. Actual Gemma installation will be done in Colab/TPU.
+bitsandbytes
+accelerate
+# jupyterlab # (Only if you need it for remote dev, not strictly for training job)
+# pandas # (Add if used for data processing)

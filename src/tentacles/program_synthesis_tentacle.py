@@ -5,6 +5,11 @@ import io
 import contextlib
 from typing import Dict, Any, Optional
 
+# Import Hugging Face Transformers components
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers.utils.quantization_config import BitsAndBytesConfig # For quantization
+import torch # For device management and model loading
+
 # Add the parent directory of src to the Python path to allow imports from common.py
 # This is crucial when running scripts directly from within tentacles/ or orchestrator/
 # and ensuring common.py is discoverable.
