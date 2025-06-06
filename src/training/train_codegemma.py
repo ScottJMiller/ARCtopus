@@ -148,8 +148,8 @@ def train_model(
         save_strategy="epoch",
         save_total_limit=1, # Save only the last checkpoint
         report_to="none", # Disable integrations like Weights & Biases for simplicity
-        fp16=True if not load_in_4bit else False, # Use mixed precision if not 4-bit (bfloat16 is usually on by default for 4-bit)
-        bf16=load_in_4bit, # Set bf16 to true if using 4-bit (or target bf16 capable GPUs)
+        fp16=True, # Use mixed precision if not 4-bit (bfloat16 is usually on by default for 4-bit)
+        bf16=False, # Set bf16 to true if using 4-bit (or target bf16 capable GPUs)
         gradient_checkpointing=True
         # Add evaluation strategy if you have a validation set
     )
