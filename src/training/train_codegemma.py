@@ -163,9 +163,19 @@ def train_model(
         # data_collator=data_collator, # Might need a custom data collator for variable length sequences
     )
 
+    latest_checkpoint = None
+    # Check if output_dir exists and contains checkpoints
+    if os.path.isdir(output_dir):
+        checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+        if checkpoints:
+            # Find the checkpoint with the highest step number
+            latest_checkpoint = os.path.join(output_dir, max(checkpoints, key=lambda x: int(x.split('-')[-1])))
+            print(f"Resuming training from latest checkpoint: {latest_checkpoint}")
+
     # Start training
     print("Starting training...")
-    trainer.train()
+    # Pass the found checkpoint to the train method
+    trainer.train(resume_from_checkpoint=latest_checkpoint)
     print("Training complete!")
 
     # Save the final model
