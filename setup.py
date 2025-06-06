@@ -12,6 +12,7 @@ setup(
         'bitsandbytes', # Needed for 4-bit quantization
         'accelerate',   # Needed for 4-bit quantization and distributed training
         'pandas',       # Potentially useful for data handling
+        'python-json-logger'
         # Add any other libraries your common.py or training code uses
     ],
     python_requires='>=3.9', # Specify Python version compatibility

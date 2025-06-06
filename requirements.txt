@@ -5,4 +5,5 @@ numpy
 bitsandbytes
 accelerate
 # jupyterlab # (Only if you need it for remote dev, not strictly for training job)
-# pandas # (Add if used for data processing)
+pandas
+python-json-logger
