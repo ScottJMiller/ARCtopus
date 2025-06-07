@@ -4,8 +4,8 @@ from setuptools import setup, find_packages
 setup(
     name='arctopus_trainer',
     version='0.1',
-    package_dir={'': 'src'},
-    packages=find_packages(where='src'), # This will find your 'src' package
+    #package_dir={'': 'src'},
+    packages=find_packages(), # This will find your 'src' package
     install_requires=[ # These should largely mirror your requirements.txt
         'torch',
         'transformers',
