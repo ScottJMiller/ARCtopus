@@ -9,6 +9,9 @@ Requires-Dist: numpy
 Requires-Dist: bitsandbytes
 Requires-Dist: accelerate
 Requires-Dist: pandas
+Requires-Dist: python-json-logger
+Requires-Dist: datasets
+Requires-Dist: gcsfs
 Dynamic: license-file
 Dynamic: requires-dist
 Dynamic: requires-python

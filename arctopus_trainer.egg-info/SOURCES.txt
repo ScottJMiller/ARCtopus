@@ -6,3 +6,7 @@ arctopus_trainer.egg-info/SOURCES.txt
 arctopus_trainer.egg-info/dependency_links.txt
 arctopus_trainer.egg-info/requires.txt
 arctopus_trainer.egg-info/top_level.txt
+src/__init__.py
+src/common.py
+src/training/__init__.py
+src/training/train_codegemma.py

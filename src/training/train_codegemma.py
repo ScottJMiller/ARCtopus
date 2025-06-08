@@ -21,10 +21,13 @@ from datasets import load_dataset
 # Adjust sys.path to find src.common and src.orchestrator
 # Vertex AI training environment will usually place your package's root on sys.path
 # but explicitly adding it here for robustness if run standalone.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from src.common import load_arc_challenges, grid_to_text, text_to_grid, COLOR_NAMES
-from src.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle # To load the model
+#from src.common import load_arc_challenges, grid_to_text, text_to_grid, COLOR_NAMES
+#from src.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle # To load the model
+
+from arctopus_trainer.common import load_arc_challenges, grid_to_text, text_to_grid, COLOR_NAMES
+from arctopus_trainer.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle # To load the model
 
 # --- Data Preparation for Fine-tuning ---
 class ARCFinetuningDataset(torch.utils.data.Dataset):

@@ -4,3 +4,6 @@ numpy
 bitsandbytes
 accelerate
 pandas
+python-json-logger
+datasets
+gcsfs
