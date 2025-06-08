@@ -26,8 +26,8 @@ from datasets import load_dataset
 #from src.common import load_arc_challenges, grid_to_text, text_to_grid, COLOR_NAMES
 #from src.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle # To load the model
 
-from arctopus_trainer.common import load_arc_challenges, grid_to_text, text_to_grid, COLOR_NAMES
-from arctopus_trainer.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle # To load the model
+#from arctopus_trainer.common import load_arc_challenges, grid_to_text, text_to_grid, COLOR_NAMES
+#from arctopus_trainer.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle # To load the model
 
 # --- Data Preparation for Fine-tuning ---
 class ARCFinetuningDataset(torch.utils.data.Dataset):
