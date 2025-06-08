@@ -10,3 +10,5 @@ src/orchestrator/__init__.py
 src/orchestrator/main_orchestrator.py
 src/tentacles/__init__.py
 src/tentacles/program_synthesis_tentacle.py
+src/training/__init__.py
+src/training/train_codegemma.py

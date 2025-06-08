@@ -5,6 +5,8 @@ import sys
 import argparse
 from pathlib import Path
 from typing import Dict, Any, List
+import json
+import time
 
 # Imports for fine-tuning
 from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -92,8 +94,8 @@ class ARCFinetuningDataset(torch.utils.data.Dataset):
 # --- Main Training Function ---
 def train_model(
     model_name: str,
-    dataset_name: str, # New parameter for dataset ID
-    data_dir: str,      # Still kept, but now used for local ARC JSON if needed
+    dataset_name: str,
+    data_dir: str,
     output_dir: str,
     num_train_epochs: int,
     per_device_train_batch_size: int,
@@ -101,7 +103,7 @@ def train_model(
     learning_rate: float,
     load_in_4bit: bool = True
 ):
-    # Load tokenizer and model (similar to Tentacle's __init__)
+    # --- Model and Tokenizer Setup ---
     bnb_config = None
     if load_in_4bit:
         bnb_config = BitsAndBytesConfig(
@@ -115,27 +117,19 @@ def train_model(
     print(f"Training on device: {device}")
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    # Ensure pad_token_id is set for training
     if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token # Common practice
+        tokenizer.pad_token = tokenizer.eos_token
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        quantization_config=bnb_config if load_in_4bit else None,
-        torch_dtype=torch.bfloat16 if load_in_4bit else torch.float16,
-        device_map="auto" if device == "cuda" else None # Let Hugging Face manage device placement
+        quantization_config=bnb_config,
+        torch_dtype=torch.bfloat16,
+        device_map="auto"
     )
-    model.train() # Set model to training mode
 
-    # --- Data Loading ---
-    # Old arc_data_path and challenges loading is now replaced by Hugging Face dataset loading
-    # arc_data_path = Path(data_dir) / "arc-agi_training_challenges.json"
-    # challenges = load_arc_challenges(str(arc_data_path))
-
-    # Instantiate the new dataset using dataset_name
+    # --- Dataset and Training Arguments ---
     train_dataset = ARCFinetuningDataset(dataset_name, tokenizer)
     
-    # --- TrainingArguments ---
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_train_epochs,
@@ -146,12 +140,11 @@ def train_model(
         logging_strategy="steps",
         logging_steps=10,
         save_strategy="epoch",
-        save_total_limit=1, # Save only the last checkpoint
-        report_to="none", # Disable integrations like Weights & Biases for simplicity
-        fp16=True, # Use mixed precision if not 4-bit (bfloat16 is usually on by default for 4-bit)
-        bf16=False, # Set bf16 to true if using 4-bit (or target bf16 capable GPUs)
-        gradient_checkpointing=True
-        # Add evaluation strategy if you have a validation set
+        save_total_limit=1,
+        report_to="none",
+        fp16=True,
+        bf16=False,
+        gradient_checkpointing=True,
     )
 
     # --- Trainer ---
@@ -163,25 +156,59 @@ def train_model(
         # data_collator=data_collator, # Might need a custom data collator for variable length sequences
     )
 
-    latest_checkpoint = None
-    # Check if output_dir exists and contains checkpoints
-    if os.path.isdir(output_dir):
-        checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
-        if checkpoints:
-            # Find the checkpoint with the highest step number
-            latest_checkpoint = os.path.join(output_dir, max(checkpoints, key=lambda x: int(x.split('-')[-1])))
-            print(f"Resuming training from latest checkpoint: {latest_checkpoint}")
-
     # Start training
     print("Starting training...")
-    # Pass the found checkpoint to the train method
-    trainer.train(resume_from_checkpoint=latest_checkpoint)
+    trainer.train()
     print("Training complete!")
 
     # Save the final model
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
     print(f"Model and tokenizer saved to {output_dir}")
+    
+    ''' THIS MAY NEED TO BE REINSTATED
+    
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        processing_class=tokenizer, # Pass tokenizer to Trainer for input handling
+        # data_collator=data_collator, # Might need a custom data collator for variable length sequences
+    )
+
+    # --- Check for Completion Before Training ---
+    latest_checkpoint = None
+    training_is_complete = False
+
+    if os.path.isdir(output_dir):
+        checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
+        if checkpoints:
+            latest_checkpoint_dir = max(checkpoints, key=lambda x: int(x.split('-')[-1]))
+            latest_checkpoint = os.path.join(output_dir, latest_checkpoint_dir)
+            
+            trainer_state_path = os.path.join(latest_checkpoint, "trainer_state.json")
+            if os.path.exists(trainer_state_path):
+                with open(trainer_state_path, 'r') as f:
+                    state = json.load(f)
+                if state['epoch'] >= training_args.num_train_epochs:
+                    training_is_complete = True
+
+    # --- Execute Training or Idle ---
+    if not training_is_complete:
+        model.train() # Set model to training mode only if we are training
+        print("Starting or resuming training...")
+        trainer.train(resume_from_checkpoint=latest_checkpoint)
+        print("Training complete!")
+
+        # Save the final model and tokenizer
+        model.save_pretrained(output_dir)
+        tokenizer.save_pretrained(output_dir)
+        print(f"Model and tokenizer saved to {output_dir}")
+    else:
+        print(f"Training previously completed. Final model is in {output_dir}.")
+        print("Idling to allow job to finalize gracefully.")
+        while True:
+            time.sleep(300) # Sleep indefinitely '''
 
 
 if __name__ == "__main__":
