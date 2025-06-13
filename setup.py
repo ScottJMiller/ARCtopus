@@ -33,7 +33,8 @@ setup(
         'pandas',       # Potentially useful for data handling
         'python-json-logger',
         'datasets',
-        'gcsfs'
+        'gcsfs',
+        'huggingface_hub',
         # Add any other libraries your common.py or training code uses
     ],
     python_requires='>=3.9', # Specify Python version compatibility
