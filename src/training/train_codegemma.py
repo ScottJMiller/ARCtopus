@@ -172,7 +172,7 @@ if __name__ == "__main__":
     # or notebook secrets, rather than hardcoding them.
     try:
         # Use HUGGING_FACE_HUB_TOKEN environment variable if available
-        token = os.environ.get("HUGGING_FACE_HUB_TOKEN", "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")
+        token = os.environ.get("HUGGING_FACE_HUB_TOKEN", placeholder_token)
         whoami(token=token)
         login(token=token)
         print("Hugging Face login successful.")
