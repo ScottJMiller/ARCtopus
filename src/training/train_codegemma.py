@@ -144,10 +144,7 @@ def train_model(
         gradient_checkpointing=True,
     )
 
-    # --- Trainer Correction ---
-    # The 'processing_class' argument is not a valid argument for the Trainer.
-    # The Trainer automatically handles tokenization when a tokenizer is available
-    # and the dataset returns tokenized inputs.
+    # --- Trainer ---
     trainer = Trainer(
         model=model,
         args=training_args,
