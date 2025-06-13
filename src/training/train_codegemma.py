@@ -170,15 +170,8 @@ def train_model(
 if __name__ == "__main__":
     # It's recommended to handle tokens securely, e.g., via environment variables
     # or notebook secrets, rather than hardcoding them.
-    try:
-        # Use HUGGING_FACE_HUB_TOKEN environment variable if available
-        token = os.environ.get("HUGGING_FACE_HUB_TOKEN", placeholder_token)
-        whoami(token=token)
-        login(token=token)
-        print("Hugging Face login successful.")
-    except Exception as e:
-        print(f"Hugging Face login failed: {e}")
-        print("Proceeding without login. Access to private models/datasets will be restricted.")
+    
+    # Need to log in to huggingface here
 
     parser = argparse.ArgumentParser(description="Fine-tune CodeGemma on ARC-like data.")
     parser.add_argument("--model_name", type=str, default="google/codegemma-2b", help="Hugging Face model ID.")
