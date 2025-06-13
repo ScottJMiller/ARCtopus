@@ -168,8 +168,6 @@ def train_model(
 
 
 if __name__ == "__main__":
-    # It's recommended to handle tokens securely, e.g., via environment variables
-    # or notebook secrets, rather than hardcoding them.
     
     # Need to log in to huggingface here
 
