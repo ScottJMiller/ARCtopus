@@ -7,3 +7,5 @@ accelerate
 # jupyterlab # (Only if you need it for remote dev, not strictly for training job)
 pandas
 python-json-logger
+datasets
+huggingface_hub

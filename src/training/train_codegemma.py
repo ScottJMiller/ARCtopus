@@ -16,18 +16,8 @@ from transformers.utils.quantization_config import BitsAndBytesConfig
 import torch
 import numpy as np
 
+from huggingface_hub import whoami, login
 from datasets import load_dataset
-
-# Adjust sys.path to find src.common and src.orchestrator
-# Vertex AI training environment will usually place your package's root on sys.path
-# but explicitly adding it here for robustness if run standalone.
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
-#from src.common import load_arc_challenges, grid_to_text, text_to_grid, COLOR_NAMES
-#from src.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle # To load the model
-
-#from arctopus_trainer.common import load_arc_challenges, grid_to_text, text_to_grid, COLOR_NAMES
-#from arctopus_trainer.tentacles.program_synthesis_tentacle import ProgramSynthesisTentacle # To load the model
 
 # --- Data Preparation for Fine-tuning ---
 class ARCFinetuningDataset(torch.utils.data.Dataset):
@@ -44,29 +34,24 @@ class ARCFinetuningDataset(torch.utils.data.Dataset):
         self.max_length = max_length
 
         # Load the dataset from Hugging Face
-        # This will download the dataset to your Paperspace/Colab environment.
         print(f"[ARCFinetuningDataset] Loading dataset: {dataset_name}")
         raw_dataset = load_dataset(dataset_name, split="train") # Assuming "train" split
-        #print(f"[ARCFinetuningDataset] Dataset loaded with {len(raw_dataset)} examples.")
 
         self.data = []
         for raw_item in raw_dataset:
-            item: Dict[str, Any] = dict(raw_item) # Explicitly cast to dict
-            prompt = item['prompt']
-            completion = item['completion'] # This is the Python code solution
+            item: Dict[str, Any] = dict(raw_item)
+            prompt = item.get('prompt', '')
+            completion = item.get('completion', '')
 
+            # Ensure prompt and completion are strings
+            if not isinstance(prompt, str) or not isinstance(completion, str):
+                continue
+                
             # Combine prompt and completion for training
             # The model learns to generate 'completion' given 'prompt'
-            # Ensure it mirrors the inference prompt structure (e.g., ends with ````python` and `def transform(...)`)
-            # and then continues with the completion.
-
-            # The prompt from the HF dataset already seems to include the common library functions.
-            # So we just concatenate prompt and completion.
-            full_text = prompt + completion # Concatenate prompt and the correct code solution
-
+            full_text = prompt + completion
             self.data.append(full_text)
 
-        # Add a print here to show the size of the *processed* dataset
         print(f"[ARCFinetuningDataset] Processed {len(self.data)} examples for fine-tuning.")
 
     def __len__(self):
@@ -77,20 +62,20 @@ class ARCFinetuningDataset(torch.utils.data.Dataset):
         encoding = self.tokenizer(
             self.data[idx],
             max_length=self.max_length,
-            padding="max_length", # Pad to max_length
-            truncation=True,     # Truncate if longer than max_length
+            padding="max_length",
+            truncation=True,
             return_tensors="pt"
         )
 
-        # For causal language models, labels are usually the input_ids shifted by one.
-        # However, `Trainer` often handles this shifting internally if labels=input_ids.
-        # We explicitly clone to ensure labels are separate tensors.
-        #labels = encoding["input_ids"].squeeze().clone()
+        # The Trainer will automatically handle shifting the labels for causal language modeling.
+        # We just need to provide the input_ids as labels.
+        input_ids = encoding["input_ids"].squeeze()
+        attention_mask = encoding["attention_mask"].squeeze()
 
         return {
-            "input_ids": encoding["input_ids"].squeeze(),
-            "attention_mask": encoding["attention_mask"].squeeze(),
-            "labels": encoding["input_ids"].clone() # Keep clone for labels
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": input_ids.clone() # Labels are the same as input_ids for CLM
         }
 
 
@@ -98,7 +83,6 @@ class ARCFinetuningDataset(torch.utils.data.Dataset):
 def train_model(
     model_name: str,
     dataset_name: str,
-    data_dir: str,
     output_dir: str,
     num_train_epochs: int,
     per_device_train_batch_size: int,
@@ -121,18 +105,28 @@ def train_model(
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
+        # Set pad token to eos token if not set
         tokenizer.pad_token = tokenizer.eos_token
-
+        
+    # The main error occurs here. The combination of arguments, especially
+    # torch_dtype alongside a quantization_config that specifies its own dtype,
+    # can cause conflicts in some versions of the library.
+    # The traceback's "TypeError: argument of type 'NoneType' is not iterable"
+    # suggests a model configuration value is not being set correctly upon initialization.
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         quantization_config=bnb_config,
-        torch_dtype=torch.bfloat16,
-        device_map="auto"
+        device_map="auto", # Use "auto" to leverage accelerate for device placement
+        # torch_dtype removed to avoid conflict with bnb_config's compute_dtype
     )
 
     # --- Dataset and Training Arguments ---
     train_dataset = ARCFinetuningDataset(dataset_name, tokenizer)
     
+    # --- Training Arguments Correction ---
+    # 1. bf16=True is set for consistency, as the bnb_config uses bfloat16.
+    #    This is generally better than fp16 on compatible hardware (Ampere+).
+    # 2. fp16 is set to False to avoid conflicts with bf16.
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_train_epochs,
@@ -145,95 +139,67 @@ def train_model(
         save_strategy="epoch",
         save_total_limit=1,
         report_to="none",
-        fp16=True,
-        bf16=False,
+        bf16=True, # CORRECTED: Use bf16 for consistency with compute_dtype
+        fp16=False, # CORRECTED: Ensure fp16 is disabled when bf16 is active
         gradient_checkpointing=True,
     )
 
-    # --- Trainer ---
+    # --- Trainer Correction ---
+    # The 'processing_class' argument is not a valid argument for the Trainer.
+    # The Trainer automatically handles tokenization when a tokenizer is available
+    # and the dataset returns tokenized inputs.
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        processing_class=tokenizer, # Pass tokenizer to Trainer for input handling
-        # data_collator=data_collator, # Might need a custom data collator for variable length sequences
+        processing_class=tokenizer
     )
 
-    # Start training
+    # --- Start Training ---
     print("Starting training...")
     trainer.train()
     print("Training complete!")
 
-    # Save the final model
+    # --- Save Final Model ---
+    # Use the output_dir directly, as it's the final save location.
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
     print(f"Model and tokenizer saved to {output_dir}")
-    
-    ''' THIS MAY NEED TO BE REINSTATED
-    
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        processing_class=tokenizer, # Pass tokenizer to Trainer for input handling
-        # data_collator=data_collator, # Might need a custom data collator for variable length sequences
-    )
-
-    # --- Check for Completion Before Training ---
-    latest_checkpoint = None
-    training_is_complete = False
-
-    if os.path.isdir(output_dir):
-        checkpoints = [d for d in os.listdir(output_dir) if d.startswith("checkpoint-")]
-        if checkpoints:
-            latest_checkpoint_dir = max(checkpoints, key=lambda x: int(x.split('-')[-1]))
-            latest_checkpoint = os.path.join(output_dir, latest_checkpoint_dir)
-            
-            trainer_state_path = os.path.join(latest_checkpoint, "trainer_state.json")
-            if os.path.exists(trainer_state_path):
-                with open(trainer_state_path, 'r') as f:
-                    state = json.load(f)
-                if state['epoch'] >= training_args.num_train_epochs:
-                    training_is_complete = True
-
-    # --- Execute Training or Idle ---
-    if not training_is_complete:
-        model.train() # Set model to training mode only if we are training
-        print("Starting or resuming training...")
-        trainer.train(resume_from_checkpoint=latest_checkpoint)
-        print("Training complete!")
-
-        # Save the final model and tokenizer
-        model.save_pretrained(output_dir)
-        tokenizer.save_pretrained(output_dir)
-        print(f"Model and tokenizer saved to {output_dir}")
-    else:
-        print(f"Training previously completed. Final model is in {output_dir}.")
-        print("Idling to allow job to finalize gracefully.")
-        while True:
-            time.sleep(300) # Sleep indefinitely '''
 
 
 if __name__ == "__main__":
+    # It's recommended to handle tokens securely, e.g., via environment variables
+    # or notebook secrets, rather than hardcoding them.
+    try:
+        # Use HUGGING_FACE_HUB_TOKEN environment variable if available
+        token = os.environ.get("HUGGING_FACE_HUB_TOKEN", "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")
+        whoami(token=token)
+        login(token=token)
+        print("Hugging Face login successful.")
+    except Exception as e:
+        print(f"Hugging Face login failed: {e}")
+        print("Proceeding without login. Access to private models/datasets will be restricted.")
+
     parser = argparse.ArgumentParser(description="Fine-tune CodeGemma on ARC-like data.")
     parser.add_argument("--model_name", type=str, default="google/codegemma-2b", help="Hugging Face model ID.")
-    parser.add_argument("--dataset_name", type=str, default="barc0/arc-agi-data-prompt-formatted-train", help="Hugging Face dataset ID.") # NEW ARG
-    parser.add_argument("--data_dir", type=str, default="data/arc-prize-2025", help="Local or GCS path to ARC data (less critical now).") # Keep if needed for other parts
-    parser.add_argument("--output_dir", type=str, default="models/codegemma_finetuned", help="Local or GCS path to save model.")
+    parser.add_argument("--dataset_name", type=str, default="barc0/arc-agi-data-prompt-formatted-train", help="Hugging Face dataset ID.")
+    parser.add_argument("--output_dir", type=str, default="./models/codegemma_finetuned", help="Local path to save model.")
     parser.add_argument("--epochs", type=int, default=1, help="Number of training epochs.")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size per device.")
     parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps.")
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate.")
-    parser.add_argument("--load_in_4bit", action="store_true", help="Load model in 4-bit quantization.")
+    parser.add_argument("--load_in_4bit", action="store_true", default=True, help="Load model in 4-bit quantization.")
+    parser.add_argument("--no-4bit", action="store_false", dest="load_in_4bit", help="Disable 4-bit quantization.")
 
-    args = parser.parse_args()
+    # In a script, you might want to parse known args if running in an environment
+    # like Jupyter that adds its own arguments.
+    args, unknown = parser.parse_known_args()
 
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
 
     train_model(
         model_name=args.model_name,
-        dataset_name=args.dataset_name, # Pass the new dataset name
-        data_dir=args.data_dir,
+        dataset_name=args.dataset_name,
         output_dir=args.output_dir,
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
